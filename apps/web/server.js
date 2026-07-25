@@ -2,6 +2,7 @@ const path = require("node:path");
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./src/routes/auth.routes");
 
@@ -21,6 +22,8 @@ app.use(
 );
 
 app.use(express.json());
+
+app.use(cookieParser());
 
 app.get("/api/health", (req, res) => {
   res.json({

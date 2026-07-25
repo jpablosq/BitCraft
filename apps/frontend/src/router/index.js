@@ -1,27 +1,53 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {
+  createRouter,
+  createWebHistory,
+} from "vue-router";
 
 import LoginView from "../views/LoginView.vue";
 import RegisterView from "../views/RegisterView.vue";
 import DashboardView from "../views/DashboardView.vue";
 
+import {
+  getCurrentUser,
+} from "../services/auth.service";
+
+async function requireAuth() {
+  try {
+    await getCurrentUser();
+
+    return true;
+  } catch {
+    return {
+      name: "login",
+    };
+  }
+}
+
 const router = createRouter({
   history: createWebHistory(),
+
   routes: [
     {
-        path: "/",
-        redirect: "/login",
+      path: "/",
+      redirect: {
+        name: "login",
+      },
     },
     {
-        path: "/login",
-        component: LoginView,
+      path: "/login",
+      name: "login",
+      component: LoginView,
     },
     {
-        path: "/register",
-        component: RegisterView,
+      path: "/register",
+      name: "register",
+      component: RegisterView,
     },
     {
-        path:"/dashboard",
-        component:DashboardView
+      path: "/dashboard",
+      name: "dashboard",
+      component: DashboardView,
+      beforeEnter: requireAuth,
     },
   ],
 });

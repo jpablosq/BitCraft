@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 
 function createToken(userId) {
-    return jwt.sign(
+  return jwt.sign(
     {},
     process.env.JWT_SECRET,
     {
@@ -13,6 +13,18 @@ function createToken(userId) {
   );
 }
 
+function verifyToken(token) {
+  return jwt.verify(
+    token,
+    process.env.JWT_SECRET,
+    {
+        issuer: "bitcraft-api",
+        audience: "bitcraft-frontend",
+    },
+  );
+}
+
 module.exports = {
     createToken,
+    verifyToken,
 };

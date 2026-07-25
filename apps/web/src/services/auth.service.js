@@ -1,11 +1,17 @@
 const db = require("../config/db");
 
-async function registerUser({ name, email, passwordHash }) {
+async function registerUser({
+  name,
+  username,
+  email,
+  passwordHash,
+}) {
   const query = `
     CALL public.sp_register_user(
       $1::varchar,
       $2::varchar,
       $3::varchar,
+      $4::varchar,
       NULL::bigint,
       NULL::timestamptz
     );
@@ -13,6 +19,7 @@ async function registerUser({ name, email, passwordHash }) {
 
   const values = [
     name,
+    username,
     email,
     passwordHash,
   ];
@@ -30,6 +37,8 @@ async function loginUser(email) {
       NULL::varchar,
       NULL::varchar,
       NULL::varchar,
+      NULL::varchar,
+      NULL::text,
       NULL::boolean
     );
   `;
@@ -39,7 +48,26 @@ async function loginUser(email) {
   return result.rows[0];
 }
 
+async function getUserById(userId) {
+  const query = `
+    CALL public.sp_get_user_by_id(
+        $1::bigint,
+        NULL::bigint,
+        NULL::varchar,
+        NULL::varchar,
+        NULL::varchar,
+        NULL::text,
+        NULL::boolean
+    );
+  `;
+
+  const result = await db.query(query, [userId]);
+
+  return result.rows[0];
+}
+
 module.exports = {
   registerUser,
   loginUser,
+  getUserById,
 };
