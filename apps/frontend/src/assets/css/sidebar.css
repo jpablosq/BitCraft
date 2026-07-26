@@ -1,0 +1,76 @@
+/* ==========================================================================
+   BitCraft · Sidebar (tema oscuro, a juego con el login)
+   Variables con prefijo --bc- para no colisionar con el framework.
+   ========================================================================== */
+
+:root{
+    --bc-bg-base:#0b1020;
+    --bc-card:#111827;
+    --bc-card-border:rgba(255,255,255,.08);
+    --bc-field:#0e1424;
+    --bc-field-border:rgba(255,255,255,.12);
+    --bc-text:#f8fafc;
+    --bc-text-soft:#cbd5e1;
+    --bc-muted:#94a3b8;
+    --bc-primary:#4f46e5;
+    --bc-primary-hover:#4338ca;
+    --bc-primary-soft:rgba(79,70,229,.25);
+    --bc-danger:#f87171;
+    --bc-danger-hover:#dc2626;
+    --bc-danger-bg:rgba(248,113,113,.12);
+    --bc-danger-border:rgba(248,113,113,.35);
+}
+
+.sidebar{
+    width:260px;
+    min-height:100vh;
+    background:var(--bc-card);
+    border-right:1px solid var(--bc-card-border);
+    color:var(--bc-text);
+    display:flex;
+    flex-direction:column;
+}
+
+.logo{
+    padding:28px 25px;
+    border-bottom:1px solid var(--bc-card-border);
+}
+
+.logo h2{
+    font-size:26px;
+    font-weight:800;
+    letter-spacing:-.5px;
+    color:var(--bc-text);
+}
+
+.menu{
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+    padding:18px 14px;
+}
+
+.menu-item{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:12px 16px;
+    border-radius:10px;
+    color:var(--bc-text-soft);
+    text-decoration:none;
+    font-size:15px;
+    font-weight:500;
+    transition:background .2s, color .2s;
+}
+
+.menu-item:hover{
+    background:var(--bc-field);
+    color:var(--bc-text);
+}
+
+.menu-item.router-link-active{
+    background:var(--bc-primary);
+    color:#fff;
+    font-weight:600;
+    box-shadow:0 8px 20px var(--bc-primary-soft);
+}

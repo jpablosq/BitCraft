@@ -33,6 +33,12 @@ export async function register(
 export async function getCurrentUser() {
   const { data } = await api.get("/auth/me");
 
+  // Si el backend devuelve { user: {...} }
+  if (data.user) {
+    return data.user;
+  }
+
+  // Si devuelve directamente el usuario
   return data;
 }
 
@@ -41,3 +47,4 @@ export async function logout() {
 
   return data;
 }
+
