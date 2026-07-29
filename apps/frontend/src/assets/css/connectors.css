@@ -450,6 +450,43 @@
 
 /* SPINNER */
 
+.provider-account {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #5f6673;
+  word-break: break-word;
+}
+
+.provider-account-name {
+  font-weight: 700;
+  color: #374151;
+}
+
+.provider-account-email {
+  color: #6b7280;
+}
+
+.provider-account-separator {
+  color: #9ca3af;
+}
+
+.connectors-message {
+  margin-bottom: 24px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 14px;
+}
+
+.connectors-message--error {
+  background: #fef2f2;
+  color: #b91c1c;
+}
 
 .btn-spinner{
 
