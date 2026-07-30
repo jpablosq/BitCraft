@@ -25,7 +25,7 @@
             id="username"
             v-model="username"
             type="text"
-            placeholder="Ejemplo: pablosq"
+            placeholder="Ejemplo: user@"
             minlength="3"
             maxlength="50"
             required

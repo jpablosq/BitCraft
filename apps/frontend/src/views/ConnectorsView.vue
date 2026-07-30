@@ -360,6 +360,18 @@ async function loadConnections() {
 
 function handleConnect(providerId) {
   connecting.value = providerId
+  const provider = providers.find(
+    (item) => item.id === providerId
+  )
+
+  const confirmConnect = window.confirm(
+    `¿Deseas conectar ${provider.name} con BitCraft?\n\n` +
+    `Esta acción permitirá que BitCraft acceda a los permisos necesarios para automatizar tus flujos de trabajo.`
+  )
+
+  if (!confirmConnect) {
+    return
+  }
   errorMessage.value = ''
 
   window.location.assign(
@@ -369,6 +381,18 @@ function handleConnect(providerId) {
 
 async function handleRevoke(providerId) {
   revoking.value = providerId
+  const provider = providers.find(
+    (item) => item.id === providerId
+  )
+
+  const confirmRevoke = window.confirm(
+    `¿Estás seguro de desconectar ${provider.name}?\n\n` +
+    `Al revocar el acceso, BitCraft dejará de utilizar esta cuenta para ejecutar automatizaciones.`
+  )
+
+  if (!confirmRevoke) {
+    return
+  }
   errorMessage.value = ''
 
   try {

@@ -28,6 +28,18 @@ router.get(
   connectionController.googleCallback,
 );
 
+router.get(
+  "/github",
+  requireAuth,
+  connectionController.connectGithub,
+);
+
+router.get(
+  "/github/callback",
+  requireAuth,
+  connectionController.githubCallback,
+);
+
 router.delete(
   "/:provider",
   requireAuth,

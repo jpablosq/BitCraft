@@ -19,14 +19,14 @@
                 to="/connectors"
                 class="menu-item"
             >
-                Concetar Servicios
+                Conexiones
             </router-link>
 
             <router-link
                 to="/tasks"
                 class="menu-item"
             >
-                Modificar Servicios
+                Automatizaciones
             </router-link>
 
             <router-link

@@ -4,6 +4,10 @@ const GoogleAdapter = require(
   "../../../../packages/providers/GoogleAdapter",
 );
 
+const GitHubAdapter = require(
+  "../../../../packages/providers/GitHubAdapter",
+);
+
 const connectionService = require(
   "../services/connection.service",
 );
@@ -33,6 +37,29 @@ function createGoogleAdapter() {
     clientId: GOOGLE_CLIENT_ID,
     clientSecret: GOOGLE_CLIENT_SECRET,
     redirectUri: GOOGLE_REDIRECT_URI,
+  });
+}
+function createGithubAdapter() {
+  const {
+    GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET,
+    GITHUB_REDIRECT_URI,
+  } = process.env;
+
+  if (
+    !GITHUB_CLIENT_ID ||
+    !GITHUB_CLIENT_SECRET ||
+    !GITHUB_REDIRECT_URI
+  ) {
+    throw new Error(
+      "Faltan las variables de entorno de GitHub OAuth",
+    );
+  }
+
+  return new GitHubAdapter({
+    clientId: GITHUB_CLIENT_ID,
+    clientSecret: GITHUB_CLIENT_SECRET,
+    redirectUri: GITHUB_REDIRECT_URI,
   });
 }
 
@@ -100,6 +127,40 @@ function connectGoogle(req, res) {
       success: false,
       message:
         "No fue posible iniciar la conexión con Google",
+    });
+  }
+}
+
+function connectGithub(req, res) {
+  try {
+    const state = crypto
+      .randomBytes(32)
+      .toString("hex");
+
+    res.cookie("github_oauth_state", state, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/api/connections/github",
+      maxAge: 10 * 60 * 1000,
+    });
+
+    const githubAdapter = createGithubAdapter();
+
+    const authorizationUrl =
+      githubAdapter.getAuthorizationUrl(state);
+
+    return res.redirect(authorizationUrl);
+  } catch (error) {
+    console.error(
+      "Error al iniciar la conexión con GitHub:",
+      error,
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No fue posible iniciar la conexión con GitHub.",
     });
   }
 }
@@ -219,6 +280,116 @@ async function googleCallback(req, res) {
   }
 }
 
+async function githubCallback(req, res) {
+  const frontendUrl =
+    process.env.FRONTEND_URL ||
+    "http://localhost:5173";
+
+  try {
+    const {
+      code,
+      state,
+      error: githubError,
+    } = req.query;
+
+    const savedState =
+      req.cookies?.github_oauth_state;
+
+    res.clearCookie(
+      "github_oauth_state",
+      {
+        httpOnly: true,
+        secure: false,
+        sameSite: "lax",
+        path: "/api/connections/github",
+      },
+    );
+
+    if (
+      !state ||
+      !savedState ||
+      state !== savedState
+    ) {
+      return res.redirect(
+        `${frontendUrl}/connectors?github=invalid_state`,
+      );
+    }
+
+    if (githubError) {
+      return res.redirect(
+        `${frontendUrl}/connectors?github=cancelled`,
+      );
+    }
+
+    if (!code) {
+      return res.redirect(
+        `${frontendUrl}/connectors?github=missing_code`,
+      );
+    }
+
+    const githubAdapter =
+      createGithubAdapter();
+
+    const tokens =
+      await githubAdapter.exchangeCodeForTokens(
+        code,
+      );
+
+    if (!tokens.accessToken) {
+      throw new Error(
+        "GitHub no devolvió un access token",
+      );
+    }
+
+    const profile =
+      await githubAdapter.getAuthenticatedUser(
+        tokens.accessToken,
+      );
+
+    if (!profile.id) {
+      throw new Error(
+        "GitHub no devolvió el identificador de la cuenta",
+      );
+    }
+
+    await connectionService.saveConnection({
+      userId: req.userId,
+      provider: "github",
+
+      providerAccountId: profile.id,
+
+      accountName: profile.name,
+
+      accountEmail: profile.email,
+
+      accessTokenEncrypted:
+        encryptToken(tokens.accessToken),
+
+      refreshTokenEncrypted:
+        encryptToken(tokens.refreshToken),
+
+      tokenExpiresAt:
+        tokens.expiresAt,
+
+      scopes:
+        tokens.scopes,
+    });
+
+    return res.redirect(
+      `${frontendUrl}/connectors?github=connected`,
+    );
+  } catch (error) {
+    console.error(
+      "Error en el callback de GitHub:",
+      error,
+    );
+
+    return res.redirect(
+      `${frontendUrl}/connectors?github=error`,
+    );
+  }
+}
+
 async function revokeConnection(req, res) {
   try {
     const { provider } = req.params;
@@ -262,5 +433,7 @@ module.exports = {
   getConnections,
   connectGoogle,
   googleCallback,
+  connectGithub,
+  githubCallback,
   revokeConnection,
 };
