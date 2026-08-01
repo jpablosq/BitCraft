@@ -1,0 +1,281 @@
+/* ==========================================================================
+   BitCraft · Automations
+   ========================================================================== */
+
+.automation-page {
+    padding: 30px;
+    color: white;
+}
+
+
+/* HEADER */
+
+.automation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+
+.automation-header h1 {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+
+.automation-header p {
+    color: #9ca3af;
+}
+
+
+/* BUTTONS */
+
+.btn-create,
+.btn-save {
+    background: #2563eb;
+    border: none;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: .2s;
+}
+
+
+.btn-create:hover,
+.btn-save:hover {
+    background: #1d4ed8;
+}
+
+
+
+/* CARD */
+
+.automation-card {
+
+    background: rgba(20,20,30,.85);
+
+    border: 1px solid rgba(255,255,255,.08);
+
+    border-radius: 18px;
+
+    padding: 25px;
+
+    margin-bottom: 20px;
+
+    backdrop-filter: blur(10px);
+
+}
+
+
+
+/* FORM */
+
+.form-row {
+
+    display:flex;
+
+    gap:20px;
+
+}
+
+
+.form-group {
+
+    flex:1;
+
+    display:flex;
+
+    flex-direction:column;
+
+    gap:8px;
+
+    margin-bottom:20px;
+
+}
+
+
+.form-group label {
+
+    color:#d1d5db;
+
+    font-size:14px;
+
+}
+
+
+.form-group input,
+.form-group select {
+
+    background:#111827;
+
+    border:1px solid #374151;
+
+    color:white;
+
+    padding:12px;
+
+    border-radius:10px;
+
+}
+
+
+
+.form-group input:focus,
+.form-group select:focus {
+
+    outline:none;
+
+    border-color:#2563eb;
+
+}
+
+
+
+/* AUTOMATION HEADER CARD */
+
+
+.automation-card-header {
+
+    display:flex;
+
+    justify-content:space-between;
+
+    align-items:center;
+
+}
+
+
+.automation-card h2 {
+
+    margin:0;
+
+    font-size:20px;
+
+}
+
+
+
+.automation-card p {
+
+    color:#9ca3af;
+
+}
+
+
+
+/* STATUS */
+
+
+.status {
+
+    padding:6px 12px;
+
+    border-radius:20px;
+
+    font-size:13px;
+
+    font-weight:bold;
+
+}
+
+
+.status.active {
+
+    background:#064e3b;
+
+    color:#34d399;
+
+}
+
+
+.status.inactive {
+
+    background:#3f1d1d;
+
+    color:#f87171;
+
+}
+
+
+
+/* INFO */
+
+.automation-info {
+
+    margin-top:20px;
+
+    display:flex;
+
+    gap:30px;
+
+}
+
+
+
+/* ACTIONS */
+
+.actions {
+
+    display:flex;
+
+    gap:12px;
+
+    margin-top:20px;
+
+}
+
+
+.actions button {
+
+    background:#374151;
+
+    border:none;
+
+    color:white;
+
+    padding:9px 16px;
+
+    border-radius:8px;
+
+    cursor:pointer;
+
+}
+
+
+.actions button:hover {
+
+    background:#4b5563;
+
+}
+
+
+
+.actions .danger {
+
+    background:#991b1b;
+
+}
+
+
+.actions .danger:hover {
+
+    background:#dc2626;
+
+}
+
+
+
+/* EMPTY */
+
+.empty {
+
+    text-align:center;
+
+    padding:40px;
+
+    color:#9ca3af;
+
+}

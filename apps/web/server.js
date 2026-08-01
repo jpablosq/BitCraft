@@ -6,6 +6,7 @@ const cookieParser = require("cookie-parser");
 
 const authRoutes = require("./src/routes/auth.routes");
 const connectionRoutes = require("./src/routes/connection.routes");
+const automationRoutes = require("./src/routes/automation.routes");
 
 dotenv.config({
   path: path.resolve(__dirname, "../../.env"),
@@ -35,6 +36,7 @@ app.get("/api/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/connections", connectionRoutes);
+app.use("/api/automations", automationRoutes);
 
 app.listen(PORT, () => {
   console.log(`Servidor ejecutándose en http://localhost:${PORT}`);

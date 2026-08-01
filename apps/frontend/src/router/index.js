@@ -8,6 +8,7 @@ import RegisterView from "../views/RegisterView.vue";
 import DashboardView from "../views/DashboardView.vue";
 import AppLayout from "../layouts/AppLayout.vue";
 import ConnectorsView from "../views/ConnectorsView.vue";
+import AutomationView from "../views/AutomationView.vue";
 
 import {
   getCurrentUser,
@@ -77,6 +78,15 @@ const router = createRouter({
           path: "connectors",
           name: "connectors",
           component: ConnectorsView,
+        },
+        
+        {
+          path: "/automations",
+          name: "automations",
+          component: AutomationView,
+          meta: {
+            requiresAuth: true
+          }
         },
 
 

@@ -23,7 +23,7 @@
             </router-link>
 
             <router-link
-                to="/tasks"
+                to="/automations"
                 class="menu-item"
             >
                 Automatizaciones
