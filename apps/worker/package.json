@@ -8,5 +8,10 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": ""
+  "description": "",
+  "dependencies": {
+    "bullmq": "^6.0.7",
+    "dotenv": "^17.4.2",
+    "ioredis": "^5.11.1"
+  }
 }

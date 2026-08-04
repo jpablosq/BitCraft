@@ -1,123 +1,148 @@
 const db = require("../config/db");
 
-async function getAutomations(userId) {
-  const client = await db.connect();
-
-  try {
-    await client.query("BEGIN");
-
-    await client.query(
-      "CALL public.sp_get_automations($1,$2)",
-      [userId, "automations_cursor"],
-    );
-
-    const result = await client.query(
-      "FETCH ALL FROM automations_cursor",
-    );
-
-    await client.query("COMMIT");
-
-    return result.rows;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
-  }
-}
-
 async function createAutomation({
   userId,
   name,
+  triggerType,
   triggerProvider,
   triggerEvent,
-  actionProvider,
-  actionName,
-  configuration,
+  triggerConfiguration = {},
+  conditions = [],
+  actions = [],
 }) {
-  await db.query(
+  const { rows } = await db.query(
     `
       CALL public.sp_create_automation(
-        $1,$2,$3,$4,$5,$6,$7
+        $1::bigint,
+        $2::varchar,
+        $3::varchar,
+        $4::varchar,
+        $5::varchar,
+        $6::jsonb,
+        $7::jsonb,
+        $8::jsonb,
+        NULL::bigint
       )
     `,
     [
       userId,
       name,
+      triggerType,
       triggerProvider,
       triggerEvent,
-      actionProvider,
-      actionName,
-      configuration,
+      JSON.stringify(triggerConfiguration),
+      JSON.stringify(conditions),
+      JSON.stringify(actions),
     ],
   );
+
+  return rows[0]?.p_automation_id;
+}
+
+async function getAutomations(userId) {
+  const { rows } = await db.query(
+    `
+      CALL public.sp_get_automations(
+        $1::bigint,
+        NULL::jsonb
+      )
+    `,
+    [userId],
+  );
+
+  return rows[0]?.p_automations ?? [];
 }
 
 async function updateAutomation({
-  id,
+  automationId,
   userId,
   name,
+  triggerType,
   triggerProvider,
   triggerEvent,
-  actionProvider,
-  actionName,
-  configuration,
-  isActive,
+  triggerConfiguration = {},
+  conditions = [],
+  actions = [],
+  isActive = true,
 }) {
-  await db.query(
+  const { rows } = await db.query(
     `
       CALL public.sp_update_automation(
-        $1,$2,$3,$4,$5,$6,$7,$8,$9
+        $1::bigint,
+        $2::bigint,
+        $3::varchar,
+        $4::varchar,
+        $5::varchar,
+        $6::varchar,
+        $7::jsonb,
+        $8::jsonb,
+        $9::jsonb,
+        $10::boolean,
+        NULL::boolean
       )
     `,
     [
-      id,
+      automationId,
       userId,
       name,
+      triggerType,
       triggerProvider,
       triggerEvent,
-      actionProvider,
-      actionName,
-      configuration,
+      JSON.stringify(triggerConfiguration),
+      JSON.stringify(conditions),
+      JSON.stringify(actions),
       isActive,
     ],
   );
+
+  return rows[0]?.p_updated ?? false;
 }
 
-async function deleteAutomation(id, userId) {
-  await db.query(
+async function deleteAutomation(automationId, userId) {
+  const { rows } = await db.query(
     `
-      CALL public.sp_delete_automation($1,$2)
-    `,
-    [
-      id,
-      userId,
-    ],
-  );
-}
-
-async function toggleAutomation(
-  id,
-  userId,
-  status,
-) {
-  await db.query(
-    `
-      CALL public.sp_toggle_automation(
-        $1,$2,$3
+      CALL public.sp_delete_automation(
+        $1::bigint,
+        $2::bigint,
+        NULL::boolean
       )
     `,
     [
-      id,
+      automationId,
       userId,
-      status,
     ],
   );
+
+  return rows[0]?.p_deleted ?? false;
+}
+
+async function toggleAutomation(
+  automationId,
+  userId,
+  isActive,
+) {
+  const { rows } = await db.query(
+    `
+      CALL public.sp_toggle_automation(
+        $1::bigint,
+        $2::bigint,
+        $3::boolean,
+        NULL::boolean
+      )
+    `,
+    [
+      automationId,
+      userId,
+      isActive,
+    ],
+  );
+
+  return rows[0]?.p_updated ?? false;
 }
 
 module.exports = {
-  getAutomations,
   createAutomation,
+  getAutomations,
   updateAutomation,
   deleteAutomation,
   toggleAutomation,

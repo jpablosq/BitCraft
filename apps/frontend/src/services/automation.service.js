@@ -1,54 +1,83 @@
-import axios from "axios";
+const API_URL = "http://localhost:3000/api/automations";
 
-const api = axios.create({
-  baseURL: "http://localhost:3000/api",
-  withCredentials: true,
-});
+async function request(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...options.headers,
+    },
+    ...options,
+  });
 
-export async function getAutomations() {
-  const { data } = await api.get("/automations");
+  const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    window.location.href = "/login";
+
+    throw new Error(
+      "La sesión ha expirado.",
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data.message ||
+      "No se pudo procesar la solicitud.",
+    );
+  }
+
   return data;
 }
 
-export async function createAutomation(payload) {
-  const { data } = await api.post(
-    "/automations",
-    payload,
-  );
+export async function getAutomations() {
+  return request(API_URL, {
+    method: "GET",
+  });
+}
 
-  return data;
+export async function createAutomation(automation) {
+  return request(API_URL, {
+    method: "POST",
+    body: JSON.stringify(automation),
+  });
 }
 
 export async function updateAutomation(
-  id,
-  payload,
+  automationId,
+  automation,
 ) {
-  const { data } = await api.put(
-    `/automations/${id}`,
-    payload,
+  return request(
+    `${API_URL}/${automationId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(automation),
+    },
   );
-
-  return data;
 }
 
-export async function deleteAutomation(id) {
-  const { data } = await api.delete(
-    `/automations/${id}`,
+export async function deleteAutomation(
+  automationId,
+) {
+  return request(
+    `${API_URL}/${automationId}`,
+    {
+      method: "DELETE",
+    },
   );
-
-  return data;
 }
 
 export async function toggleAutomation(
-  id,
+  automationId,
   isActive,
 ) {
-  const { data } = await api.patch(
-    `/automations/${id}/status`,
+  return request(
+    `${API_URL}/${automationId}/status`,
     {
-      isActive,
+      method: "PATCH",
+      body: JSON.stringify({
+        isActive,
+      }),
     },
   );
-
-  return data;
 }

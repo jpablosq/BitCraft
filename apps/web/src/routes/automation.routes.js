@@ -28,16 +28,16 @@ router.put(
   automationController.updateAutomation,
 );
 
-router.delete(
-  "/:id",
-  requireAuth,
-  automationController.deleteAutomation,
-);
-
 router.patch(
   "/:id/status",
   requireAuth,
   automationController.toggleAutomation,
+);
+
+router.delete(
+  "/:id",
+  requireAuth,
+  automationController.deleteAutomation,
 );
 
 module.exports = router;
