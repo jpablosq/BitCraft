@@ -417,3 +417,52 @@ BEGIN
     p_updated := v_affected_rows > 0;
 END;
 $$;
+
+-- 6. OBTENER AUTOMATIZACIÓN PARA EJECUTAR
+CREATE OR REPLACE PROCEDURE public.sp_get_automation_for_execution(
+    IN p_automation_id BIGINT,
+    IN p_user_id BIGINT,
+
+    OUT p_automation JSONB
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    SELECT JSONB_BUILD_OBJECT(
+        'id', automation.id,
+        'userId', automation.user_id,
+        'name', automation.name,
+        'triggerType', automation.trigger_type,
+        'triggerProvider', automation.trigger_provider,
+        'triggerEvent', automation.trigger_event,
+        'triggerConfiguration',
+            automation.trigger_configuration,
+        'conditions', automation.conditions,
+        'actions',
+            COALESCE(
+                (
+                    SELECT JSONB_AGG(
+                        JSONB_BUILD_OBJECT(
+                            'id', action.id,
+                            'position', action.position,
+                            'provider', action.provider,
+                            'actionName', action.action_name,
+                            'configuration',
+                                action.configuration
+                        )
+                        ORDER BY action.position
+                    )
+                    FROM public.automation_actions AS action
+                    WHERE action.automation_id =
+                        automation.id
+                ),
+                '[]'::jsonb
+            )
+    )
+    INTO p_automation
+    FROM public.automations AS automation
+    WHERE automation.id = p_automation_id
+      AND automation.user_id = p_user_id
+      AND automation.is_active = TRUE;
+END;
+$$;

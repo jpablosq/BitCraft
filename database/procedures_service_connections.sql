@@ -141,3 +141,52 @@ BEGIN
     p_revoked := v_affected_rows > 0;
 END;
 $$;
+
+-- 4. OBTENER CONEXIÓN ACTIVA PARA EL WORKER
+CREATE OR REPLACE PROCEDURE public.sp_get_active_service_connection(
+    IN p_user_id BIGINT,
+    IN p_provider VARCHAR(50),
+
+    OUT p_connection JSONB
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_provider VARCHAR(50);
+BEGIN
+    v_provider := LOWER(BTRIM(p_provider));
+
+    IF v_provider NOT IN ('google', 'github') THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '22023',
+            MESSAGE = 'INVALID_PROVIDER';
+    END IF;
+
+    SELECT JSONB_BUILD_OBJECT(
+        'id', connection.id,
+        'userId', connection.user_id,
+        'provider', connection.provider,
+        'providerAccountId',
+            connection.provider_account_id,
+        'accountName',
+            connection.account_name,
+        'accountEmail',
+            connection.account_email,
+        'accessTokenEncrypted',
+            connection.access_token_encrypted,
+        'refreshTokenEncrypted',
+            connection.refresh_token_encrypted,
+        'tokenExpiresAt',
+            connection.token_expires_at,
+        'scopes',
+            connection.scopes
+    )
+    INTO p_connection
+    FROM public.service_connections AS connection
+    WHERE connection.user_id = p_user_id
+      AND connection.provider = v_provider
+      AND connection.is_active = TRUE
+    ORDER BY connection.id DESC
+    LIMIT 1;
+END;
+$$;

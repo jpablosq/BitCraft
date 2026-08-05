@@ -1,5 +1,16 @@
 const path = require("node:path");
 const { Worker } = require("bullmq");
+const pool = require("./database");
+const {
+  getAutomationForExecution,
+} = require("./automation.service");
+const {
+  executeAutomationActions,
+} = require("./action.executor");
+
+const {
+  evaluateConditions,
+} = require("./condition.evaluator");
 
 require("dotenv").config({
   path: path.resolve(__dirname, "../../.env"),
@@ -10,26 +21,180 @@ const connection = {
   port: Number(process.env.REDIS_PORT || 6379),
 };
 
+async function updateExecutionStatus({
+  executionId,
+  userId,
+  status,
+  outputData = null,
+  errorMessage = null,
+}) {
+  await pool.query(
+    `
+      CALL public.sp_update_automation_execution_status(
+        $1,
+        $2,
+        $3,
+        $4::jsonb,
+        $5,
+        NULL
+      )
+    `,
+    [
+      executionId,
+      userId,
+      status,
+      outputData
+        ? JSON.stringify(outputData)
+        : null,
+      errorMessage,
+    ],
+  );
+}
+
 const automationWorker = new Worker(
   "automation-execution",
 
   async (job) => {
+    const {
+      executionId,
+      automationId,
+      userId,
+      inputData = {},
+    } = job.data || {};
+
+    if (!executionId || !automationId || !userId) {
+      throw new Error(
+        "El trabajo no contiene executionId, automationId o userId.",
+      );
+    }
+
     console.log(
       `[Worker] Procesando trabajo ${job.id}`,
       {
-        name: job.name,
-        automationId: job.data?.automationId,
-        userId: job.data?.userId,
+        executionId,
+        automationId,
+        userId,
+        attempt: job.attemptsMade + 1,
       },
     );
 
-    // Más adelante aquí se ejecutarán las acciones reales
-    // de Google y GitHub.
+    try {
+      await updateExecutionStatus({
+        executionId,
+        userId,
+        status: "processing",
+      });
 
-    return {
-      processed: true,
-      processedAt: new Date().toISOString(),
-    };
+      const automation =
+        await getAutomationForExecution(
+          automationId,
+          userId,
+        );
+
+      if (!automation) {
+        throw new Error(
+          "AUTOMATION_NOT_FOUND_OR_INACTIVE",
+        );
+      }
+
+      if (
+        !Array.isArray(automation.actions) ||
+        automation.actions.length === 0
+      ) {
+        throw new Error(
+          "AUTOMATION_WITHOUT_ACTIONS",
+        );
+      }
+
+      console.log(
+        `[Worker] Automatización encontrada: ${automation.name}`,
+        {
+          triggerType: automation.triggerType,
+          actions: automation.actions.length,
+        },
+      );
+
+      const conditionEvaluation =
+        evaluateConditions({
+          conditions:
+            automation.conditions || [],
+          inputData,
+        });
+
+      console.log(
+        "[Worker] Resultado de condiciones:",
+        {
+          passed: conditionEvaluation.passed,
+          total:
+            conditionEvaluation.results.length,
+        },
+      );
+
+      if (!conditionEvaluation.passed) {
+        const result = {
+          processed: true,
+          skipped: true,
+          reason: "CONDITIONS_NOT_MET",
+          automationId,
+          automationName: automation.name,
+          actionCount: 0,
+          conditions:
+            conditionEvaluation.results,
+          processedAt:
+            new Date().toISOString(),
+        };
+
+        await updateExecutionStatus({
+          executionId,
+          userId,
+          status: "success",
+          outputData: result,
+        });
+
+        return result;
+      }
+
+      const actionResults =
+        await executeAutomationActions({
+          automation,
+          userId,
+          inputData,
+        });
+
+      const result = {
+        processed: true,
+        automationId,
+        automationName: automation.name,
+        actionCount: actionResults.length,
+        actions: actionResults,
+        processedAt: new Date().toISOString(),
+      };
+
+      await updateExecutionStatus({
+        executionId,
+        userId,
+        status: "success",
+        outputData: result,
+      });
+
+      return result;
+    } catch (error) {
+      try {
+        await updateExecutionStatus({
+          executionId,
+          userId,
+          status: "failed",
+          errorMessage: error.message,
+        });
+      } catch (databaseError) {
+        console.error(
+          "[Worker] No se pudo guardar el error en PostgreSQL:",
+          databaseError.message,
+        );
+      }
+
+      throw error;
+    }
   },
 
   {
@@ -38,44 +203,32 @@ const automationWorker = new Worker(
   },
 );
 
-automationWorker.on(
-  "ready",
-  () => {
-    console.log(
-      "[Worker] Conectado a Redis y esperando trabajos.",
-    );
-  },
-);
+automationWorker.on("ready", () => {
+  console.log(
+    "[Worker] Conectado a Redis y esperando trabajos.",
+  );
+});
 
-automationWorker.on(
-  "completed",
-  (job, result) => {
-    console.log(
-      `[Worker] Trabajo ${job.id} completado.`,
-      result,
-    );
-  },
-);
+automationWorker.on("completed", (job, result) => {
+  console.log(
+    `[Worker] Trabajo ${job.id} completado.`,
+    result,
+  );
+});
 
-automationWorker.on(
-  "failed",
-  (job, error) => {
-    console.error(
-      `[Worker] Trabajo ${job?.id} falló:`,
-      error.message,
-    );
-  },
-);
+automationWorker.on("failed", (job, error) => {
+  console.error(
+    `[Worker] Trabajo ${job?.id} falló:`,
+    error.message,
+  );
+});
 
-automationWorker.on(
-  "error",
-  (error) => {
-    console.error(
-      "[Worker] Error de conexión:",
-      error.message,
-    );
-  },
-);
+automationWorker.on("error", (error) => {
+  console.error(
+    "[Worker] Error de conexión:",
+    error.message,
+  );
+});
 
 async function shutdown(signal) {
   console.log(
@@ -83,6 +236,7 @@ async function shutdown(signal) {
   );
 
   await automationWorker.close();
+  await pool.end();
 
   process.exit(0);
 }

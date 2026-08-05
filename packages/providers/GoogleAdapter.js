@@ -68,6 +68,82 @@ class GoogleAdapter extends ProviderAdapter {
       accountEmail: data.email ?? null,
     };
   }
+  
+  async sendEmail({
+    accessToken,
+    refreshToken = null,
+    to,
+    subject,
+    body,
+  }) {
+    if (!accessToken) {
+      throw new Error(
+        "GOOGLE_ACCESS_TOKEN_REQUIRED",
+      );
+    }
+
+    if (!to || !String(to).trim()) {
+      throw new Error(
+        "EMAIL_RECIPIENT_REQUIRED",
+      );
+    }
+
+    if (!subject || !String(subject).trim()) {
+      throw new Error(
+        "EMAIL_SUBJECT_REQUIRED",
+      );
+    }
+
+    this.oauth2Client.setCredentials({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    const gmail = google.gmail({
+      version: "v1",
+      auth: this.oauth2Client,
+    });
+
+    const safeTo = String(to)
+      .replace(/[\r\n]/g, "")
+      .trim();
+
+    const safeSubject = String(subject)
+      .replace(/[\r\n]/g, " ")
+      .trim();
+
+    const encodedSubject = Buffer
+      .from(safeSubject, "utf8")
+      .toString("base64");
+
+    const message = [
+      `To: ${safeTo}`,
+      `Subject: =?UTF-8?B?${encodedSubject}?=`,
+      "MIME-Version: 1.0",
+      'Content-Type: text/plain; charset="UTF-8"',
+      "",
+      String(body ?? ""),
+    ].join("\r\n");
+
+    const raw = Buffer
+      .from(message, "utf8")
+      .toString("base64url");
+
+    const { data } =
+      await gmail.users.messages.send({
+        userId: "me",
+        requestBody: {
+          raw,
+        },
+      });
+
+    return {
+      provider: "google",
+      actionName: "send_email",
+      messageId: data.id,
+      threadId: data.threadId ?? null,
+    };
+  }
 
   async revokeAccess(accessToken) {
     await this.oauth2Client.revokeToken(

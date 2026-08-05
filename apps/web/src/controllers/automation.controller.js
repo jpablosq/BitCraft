@@ -309,10 +309,134 @@ async function toggleAutomation(req, res) {
   }
 }
 
+async function executeAutomation(req, res) {
+  try {
+    const automationId = getAutomationId(req);
+
+    if (!automationId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El identificador de la automatización no es válido.",
+      });
+    }
+
+    const body = req.body || {};
+
+    const idempotencyKey = String(
+      req.get("Idempotency-Key") ||
+      body.idempotencyKey ||
+      "",
+    ).trim();
+
+    if (!idempotencyKey) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Debe enviar una clave de idempotencia.",
+      });
+    }
+
+    const inputData = body.inputData ?? {};
+
+    if (
+      typeof inputData !== "object" ||
+      inputData === null ||
+      Array.isArray(inputData)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Los datos de entrada deben ser un objeto.",
+      });
+    }
+
+    const execution =
+      await automationService.enqueueAutomationExecution({
+        automationId,
+        userId: req.userId,
+        idempotencyKey,
+        inputData,
+      });
+
+    return res
+      .status(execution.created ? 202 : 200)
+      .json({
+        success: true,
+        message: execution.created
+          ? "Ejecución enviada correctamente."
+          : "La ejecución ya había sido registrada.",
+        executionId: execution.executionId,
+        created: execution.created,
+      });
+  } catch (error) {
+    return handleControllerError(error, res);
+  }
+}
+
+async function getAutomationExecutions(req, res) {
+  try {
+    let automationId = null;
+    let limit = 50;
+
+    if (
+      req.query.automationId !== undefined &&
+      req.query.automationId !== ""
+    ) {
+      automationId = Number(
+        req.query.automationId,
+      );
+
+      if (
+        !Number.isInteger(automationId) ||
+        automationId <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "El identificador de la automatización no es válido.",
+        });
+      }
+    }
+
+    if (req.query.limit !== undefined) {
+      limit = Number(req.query.limit);
+
+      if (
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > 100
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "El límite debe estar entre 1 y 100.",
+        });
+      }
+    }
+
+    const executions =
+      await automationService.getAutomationExecutions({
+        userId: req.userId,
+        automationId,
+        limit,
+      });
+
+    return res.status(200).json({
+      success: true,
+      executions,
+    });
+  } catch (error) {
+    return handleControllerError(error, res);
+  }
+}
+
 module.exports = {
   getAutomations,
   createAutomation,
   updateAutomation,
   deleteAutomation,
   toggleAutomation,
+  executeAutomation,
+  getAutomationExecutions,
 };

@@ -16,10 +16,22 @@ router.get(
   automationController.getAutomations,
 );
 
+router.get(
+  "/executions",
+  requireAuth,
+  automationController.getAutomationExecutions,
+);
+
 router.post(
   "/",
   requireAuth,
   automationController.createAutomation,
+);
+
+router.post(
+  "/:id/execute",
+  requireAuth,
+  automationController.executeAutomation,
 );
 
 router.put(
