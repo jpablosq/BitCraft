@@ -509,3 +509,53 @@ BEGIN
       ) IS NOT NULL;
 END;
 $$;
+
+-- 8. OBTENER AUTOMATIZACIONES PARA EVENTO DE ISSUE DE GITHUB
+CREATE OR REPLACE PROCEDURE public.sp_get_github_issue_automations(
+    IN p_repository VARCHAR(255),
+    OUT p_automations JSONB
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_repository IS NULL
+       OR BTRIM(p_repository) = '' THEN
+        RAISE EXCEPTION USING
+            ERRCODE = '22023',
+            MESSAGE = 'GITHUB_REPOSITORY_REQUIRED';
+    END IF;
+
+    SELECT COALESCE(
+        JSONB_AGG(
+            JSONB_BUILD_OBJECT(
+                'id',
+                    automation.id,
+
+                'userId',
+                    automation.user_id,
+
+                'name',
+                    automation.name,
+
+                'repository',
+                    automation.trigger_configuration
+                        ->> 'repository'
+            )
+            ORDER BY automation.id
+        ),
+        '[]'::jsonb
+    )
+    INTO p_automations
+    FROM public.automations AS automation
+    WHERE automation.is_active = TRUE
+      AND automation.trigger_type = 'event'
+      AND automation.trigger_provider = 'github'
+      AND automation.trigger_event = 'issue.created'
+      AND LOWER(
+          BTRIM(
+              automation.trigger_configuration
+                  ->> 'repository'
+          )
+      ) = LOWER(BTRIM(p_repository));
+END;
+$$;

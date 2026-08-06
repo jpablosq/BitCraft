@@ -81,3 +81,29 @@ export async function toggleAutomation(
     },
   );
 }
+
+export async function getAutomationExecutions({
+  automationId = null,
+  limit = 50,
+} = {}) {
+  const queryParams = new URLSearchParams();
+
+  queryParams.set(
+    "limit",
+    String(limit),
+  );
+
+  if (automationId) {
+    queryParams.set(
+      "automationId",
+      String(automationId),
+    );
+  }
+
+  return request(
+    `${API_URL}/executions?${queryParams.toString()}`,
+    {
+      method: "GET",
+    },
+  );
+}

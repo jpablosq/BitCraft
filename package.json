@@ -1,0 +1,11 @@
+{
+  "name": "bitcraft",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --names FRONTEND,WEB,WORKER,SCHEDULER \"npm --prefix apps/frontend run dev\" \"npm --prefix apps/web run dev\" \"node apps/worker/worker.js\" \"npm --prefix apps/scheduler run start\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

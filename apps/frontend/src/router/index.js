@@ -9,6 +9,7 @@ import DashboardView from "../views/DashboardView.vue";
 import AppLayout from "../layouts/AppLayout.vue";
 import ConnectorsView from "../views/ConnectorsView.vue";
 import AutomationView from "../views/AutomationView.vue";
+import ExecutionHistoryView from "../views/ExecutionHistoryView.vue";
 
 import {
   getCurrentUser,
@@ -17,27 +18,21 @@ import {
 
 async function requireAuth() {
   try {
-
     await getCurrentUser();
 
     return true;
-
   } catch {
-
     return {
       name: "login",
     };
-
   }
 }
 
 
 const router = createRouter({
-
   history: createWebHistory(),
 
   routes: [
-
     {
       path: "/",
       redirect: {
@@ -45,13 +40,11 @@ const router = createRouter({
       },
     },
 
-
     {
       path: "/login",
       name: "login",
       component: LoginView,
     },
-
 
     {
       path: "/register",
@@ -59,43 +52,38 @@ const router = createRouter({
       component: RegisterView,
     },
 
-
     {
       path: "/",
       component: AppLayout,
       beforeEnter: requireAuth,
 
       children: [
-
         {
           path: "dashboard",
           name: "dashboard",
           component: DashboardView,
         },
 
-
         {
           path: "connectors",
           name: "connectors",
           component: ConnectorsView,
         },
-        
+
         {
-          path: "/automations",
+          path: "automations",
           name: "automations",
           component: AutomationView,
-          meta: {
-            requiresAuth: true
-          }
         },
 
-
+        {
+          path: "tasks",
+          name: "execution-history",
+          component: ExecutionHistoryView,
+        },
       ],
-
     },
-
   ],
-
 });
 
 
