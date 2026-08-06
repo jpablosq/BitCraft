@@ -466,3 +466,46 @@ BEGIN
       AND automation.is_active = TRUE;
 END;
 $$;
+
+-- 7. OBTENER AUTOMATIZACIONES PROGRAMADAS ACTIVAS
+CREATE OR REPLACE PROCEDURE public.sp_get_active_scheduled_automations(
+    OUT p_automations JSONB
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    SELECT COALESCE(
+        JSONB_AGG(
+            JSONB_BUILD_OBJECT(
+                'id',
+                    automation.id,
+
+                'userId',
+                    automation.user_id,
+
+                'name',
+                    automation.name,
+
+                'cronExpression',
+                    automation.trigger_configuration
+                        ->> 'cronExpression'
+            )
+            ORDER BY automation.id
+        ),
+        '[]'::jsonb
+    )
+    INTO p_automations
+    FROM public.automations AS automation
+    WHERE automation.is_active = TRUE
+      AND automation.trigger_type = 'schedule'
+      AND automation.trigger_provider = 'system'
+      AND automation.trigger_event = 'cron'
+      AND NULLIF(
+          BTRIM(
+              automation.trigger_configuration
+                  ->> 'cronExpression'
+          ),
+          ''
+      ) IS NOT NULL;
+END;
+$$;
