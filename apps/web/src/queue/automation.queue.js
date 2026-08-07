@@ -12,7 +12,6 @@ const automationQueue = new Queue(
         process.env.REDIS_PORT || 6379,
       ),
 
-      // El endpoint falla rápido si Redis no responde.
       maxRetriesPerRequest: 1,
     },
 
@@ -20,8 +19,7 @@ const automationQueue = new Queue(
       attempts: 3,
 
       backoff: {
-        type: "exponential",
-        delay: 2000,
+        type: "provider-aware",
       },
 
       removeOnComplete: 100,

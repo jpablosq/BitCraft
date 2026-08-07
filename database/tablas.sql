@@ -162,3 +162,83 @@ CREATE TABLE public.automation_executions (
         idempotency_key
     )
 );
+
+-- TABLA: EJECUCIONES INDIVIDUALES DE ACCIONES
+CREATE TABLE IF NOT EXISTS public.automation_action_executions (
+    id BIGSERIAL PRIMARY KEY,
+
+    execution_id BIGINT NOT NULL,
+
+    action_position INTEGER NOT NULL,
+
+    provider VARCHAR(50) NOT NULL,
+
+    action_name VARCHAR(100) NOT NULL,
+
+    status VARCHAR(20) NOT NULL
+        DEFAULT 'pending',
+
+    attempts INTEGER NOT NULL
+        DEFAULT 0,
+
+    result_data JSONB,
+
+    error_message TEXT,
+
+    created_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    started_at TIMESTAMPTZ,
+
+    finished_at TIMESTAMPTZ,
+
+    updated_at TIMESTAMPTZ NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_action_executions_execution
+        FOREIGN KEY (execution_id)
+        REFERENCES public.automation_executions(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT chk_action_execution_position
+        CHECK (action_position > 0),
+
+    CONSTRAINT chk_action_execution_provider
+        CHECK (
+            provider IN (
+                'google',
+                'github'
+            )
+        ),
+
+    CONSTRAINT chk_action_execution_status
+        CHECK (
+            status IN (
+                'pending',
+                'processing',
+                'success',
+                'failed'
+            )
+        ),
+
+    CONSTRAINT chk_action_execution_attempts
+        CHECK (attempts >= 0),
+
+    CONSTRAINT uq_action_execution_position
+        UNIQUE (
+            execution_id,
+            action_position
+        )
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_action_executions_execution
+ON public.automation_action_executions (
+    execution_id
+);
+
+CREATE INDEX IF NOT EXISTS
+    idx_action_executions_status
+ON public.automation_action_executions (
+    status
+);

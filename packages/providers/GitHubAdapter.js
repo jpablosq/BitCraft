@@ -4,47 +4,66 @@ const {
 
 const axios = require("axios");
 
+const {
+  normalizeProviderError,
+} = require("./provider-error");
+
+
 class GitHubAdapter {
   constructor({
     clientId,
     clientSecret,
     redirectUri,
   }) {
-    this.client = new AuthorizationCode({
-      client: {
-        id: clientId,
-        secret: clientSecret,
-      },
+    this.client =
+      new AuthorizationCode({
+        client: {
+          id: clientId,
+          secret: clientSecret,
+        },
 
-      auth: {
-        tokenHost: "https://github.com",
-        authorizePath:
-          "/login/oauth/authorize",
-        tokenPath:
-          "/login/oauth/access_token",
-      },
-    });
+        auth: {
+          tokenHost:
+            "https://github.com",
 
-    this.redirectUri = redirectUri;
+          authorizePath:
+            "/login/oauth/authorize",
+
+          tokenPath:
+            "/login/oauth/access_token",
+        },
+      });
+
+    this.redirectUri =
+      redirectUri;
   }
+
 
   getAuthorizationUrl(state) {
     return this.client.authorizeURL({
-      redirect_uri: this.redirectUri,
+      redirect_uri:
+        this.redirectUri,
+
       scope:
         "read:user user:email repo",
+
       state,
     });
   }
 
-  async exchangeCodeForTokens(code) {
+
+  async exchangeCodeForTokens(
+    code,
+  ) {
     const token =
       await this.client.getToken(
         {
           code,
+
           redirect_uri:
             this.redirectUri,
         },
+
         {
           headers: {
             Accept:
@@ -58,28 +77,52 @@ class GitHubAdapter {
 
     return {
       accessToken,
-      refreshToken: null,
-      expiresAt: null,
+
+      refreshToken:
+        null,
+
+      expiresAt:
+        null,
+
       scopes:
         token.token.scope ??
         "read:user user:email repo",
     };
   }
 
+
   async getAuthenticatedUser(
     accessToken,
   ) {
-    const { data } = await axios.get(
-      "https://api.github.com/user",
-      {
-        headers: {
-          Authorization:
-            `Bearer ${accessToken}`,
-          Accept:
-            "application/vnd.github+json",
-        },
-      },
-    );
+    let data;
+
+    try {
+      const response =
+        await axios.get(
+          "https://api.github.com/user",
+
+          {
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+
+              Accept:
+                "application/vnd.github+json",
+
+              "X-GitHub-Api-Version":
+                "2022-11-28",
+            },
+          },
+        );
+
+      data =
+        response.data;
+    } catch (error) {
+      throw normalizeProviderError(
+        "github",
+        error,
+      );
+    }
 
     let email = null;
 
@@ -87,12 +130,17 @@ class GitHubAdapter {
       const response =
         await axios.get(
           "https://api.github.com/user/emails",
+
           {
             headers: {
               Authorization:
                 `Bearer ${accessToken}`,
+
               Accept:
                 "application/vnd.github+json",
+
+              "X-GitHub-Api-Version":
+                "2022-11-28",
             },
           },
         );
@@ -104,7 +152,8 @@ class GitHubAdapter {
         );
 
       email =
-        primaryEmail?.email ?? null;
+        primaryEmail?.email ??
+        null;
     } catch (error) {
       console.warn(
         "No fue posible obtener el correo de GitHub",
@@ -112,7 +161,8 @@ class GitHubAdapter {
     }
 
     return {
-      id: String(data.id),
+      id:
+        String(data.id),
 
       name:
         data.name ??
@@ -127,6 +177,7 @@ class GitHubAdapter {
         data.avatar_url,
     };
   }
+
 
   async createIssue({
     accessToken,
@@ -174,52 +225,63 @@ class GitHubAdapter {
     const normalizedRepo =
       String(repo).trim();
 
-    const { data } =
-      await axios.post(
-        `https://api.github.com/repos/${encodeURIComponent(
-          normalizedOwner,
-        )}/${encodeURIComponent(
-          normalizedRepo,
-        )}/issues`,
+    try {
+      const { data } =
+        await axios.post(
+          `https://api.github.com/repos/${encodeURIComponent(
+            normalizedOwner,
+          )}/${encodeURIComponent(
+            normalizedRepo,
+          )}/issues`,
 
-        {
-          title:
-            String(title).trim(),
+          {
+            title:
+              String(title).trim(),
 
-          body:
-            String(body ?? ""),
-        },
-
-        {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-
-            Accept:
-              "application/vnd.github+json",
-
-            "X-GitHub-Api-Version":
-              "2022-11-28",
+            body:
+              String(
+                body ?? "",
+              ),
           },
-        },
+
+          {
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+
+              Accept:
+                "application/vnd.github+json",
+
+              "X-GitHub-Api-Version":
+                "2022-11-28",
+            },
+          },
+        );
+
+      return {
+        provider:
+          "github",
+
+        actionName:
+          "create_issue",
+
+        issueNumber:
+          data.number,
+
+        issueId:
+          data.id,
+
+        issueUrl:
+          data.html_url,
+      };
+    } catch (error) {
+      throw normalizeProviderError(
+        "github",
+        error,
       );
-
-    return {
-      provider: "github",
-
-      actionName:
-        "create_issue",
-
-      issueNumber:
-        data.number,
-
-      issueId:
-        data.id,
-
-      issueUrl:
-        data.html_url,
-    };
+    }
   }
+
 
   async addComment({
     accessToken,
@@ -281,57 +343,68 @@ class GitHubAdapter {
     const normalizedRepo =
       String(repo).trim();
 
-    const { data } =
-      await axios.post(
-        `https://api.github.com/repos/${encodeURIComponent(
-          normalizedOwner,
-        )}/${encodeURIComponent(
-          normalizedRepo,
-        )}/issues/${parsedIssueNumber}/comments`,
+    try {
+      const { data } =
+        await axios.post(
+          `https://api.github.com/repos/${encodeURIComponent(
+            normalizedOwner,
+          )}/${encodeURIComponent(
+            normalizedRepo,
+          )}/issues/${parsedIssueNumber}/comments`,
 
-        {
-          body:
-            String(body).trim(),
-        },
-
-        {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-
-            Accept:
-              "application/vnd.github+json",
-
-            "X-GitHub-Api-Version":
-              "2022-11-28",
+          {
+            body:
+              String(body).trim(),
           },
-        },
+
+          {
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+
+              Accept:
+                "application/vnd.github+json",
+
+              "X-GitHub-Api-Version":
+                "2022-11-28",
+            },
+          },
+        );
+
+      return {
+        provider:
+          "github",
+
+        actionName:
+          "add_comment",
+
+        commentId:
+          data.id,
+
+        commentUrl:
+          data.html_url,
+
+        issueNumber:
+          parsedIssueNumber,
+      };
+    } catch (error) {
+      throw normalizeProviderError(
+        "github",
+        error,
       );
-
-    return {
-      provider: "github",
-
-      actionName:
-        "add_comment",
-
-      commentId:
-        data.id,
-
-      commentUrl:
-        data.html_url,
-
-      issueNumber:
-        parsedIssueNumber,
-    };
+    }
   }
 
-  async revokeAccess() {
-    // Las GitHub OAuth Apps no permiten
-    // revocar únicamente con el access token.
-    // BitCraft elimina la conexión localmente.
 
+  async revokeAccess() {
+    /*
+     * Las GitHub OAuth Apps no permiten
+     * revocar únicamente con el access token.
+     * BitCraft elimina la conexión localmente.
+     */
     return true;
   }
 }
+
 
 module.exports = GitHubAdapter;

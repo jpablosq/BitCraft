@@ -1,5 +1,9 @@
 const path = require("node:path");
-const { Worker } = require("bullmq");
+
+const {
+  Worker,
+  UnrecoverableError,
+} = require("bullmq");
 
 const pool = require("./database");
 
@@ -20,8 +24,12 @@ const deadLetterQueue = require(
 );
 
 require("dotenv").config({
-  path: path.resolve(__dirname, "../../.env"),
+  path: path.resolve(
+    __dirname,
+    "../../.env",
+  ),
 });
+
 
 const connection = {
   host:
@@ -29,9 +37,74 @@ const connection = {
     "127.0.0.1",
 
   port: Number(
-    process.env.REDIS_PORT || 6379,
+    process.env.REDIS_PORT ||
+      6379,
   ),
 };
+
+
+/*
+ * Estrategia de reintentos para
+ * errores de proveedores externos.
+ *
+ * - Si existe Retry-After, se respeta.
+ * - Si no existe, se utiliza
+ *   backoff exponencial.
+ */
+function providerAwareBackoffStrategy(
+  attemptsMade,
+  type,
+  error,
+) {
+  if (type !== "provider-aware") {
+    throw new Error(
+      `BACKOFF_STRATEGY_NOT_SUPPORTED: ${type}`,
+    );
+  }
+
+  const rawRetryAfterMs =
+  error?.retryAfterMs;
+
+  const retryAfterMs =
+    rawRetryAfterMs === null ||
+    rawRetryAfterMs === undefined
+      ? null
+      : Number(
+          rawRetryAfterMs,
+        );
+        
+  if (
+    Number.isFinite(
+      retryAfterMs,
+    ) &&
+    retryAfterMs >= 0
+  ) {
+    console.log(
+      `[Worker] Rate limit detectado. Reintentando en ${retryAfterMs} ms.`,
+    );
+
+    return retryAfterMs;
+  }
+
+  const baseDelay = 2000;
+
+  const exponentialDelay =
+    baseDelay *
+    Math.pow(
+      2,
+      Math.max(
+        0,
+        attemptsMade - 1,
+      ),
+    );
+
+  console.log(
+    `[Worker] Backoff exponencial: ${exponentialDelay} ms.`,
+  );
+
+  return exponentialDelay;
+}
+
 
 async function updateExecutionStatus({
   executionId,
@@ -57,7 +130,9 @@ async function updateExecutionStatus({
       status,
 
       outputData
-        ? JSON.stringify(outputData)
+        ? JSON.stringify(
+            outputData,
+          )
         : null,
 
       errorMessage,
@@ -65,119 +140,179 @@ async function updateExecutionStatus({
   );
 }
 
-const automationWorker = new Worker(
-  "automation-execution",
 
-  async (job) => {
-    const {
-      executionId,
-      automationId,
-      userId,
-      inputData = {},
-    } = job.data || {};
+const automationWorker =
+  new Worker(
+    "automation-execution",
 
-    if (
-      !executionId ||
-      !automationId ||
-      !userId
-    ) {
-      throw new Error(
-        "El trabajo no contiene executionId, automationId o userId.",
-      );
-    }
-
-    console.log(
-      `[Worker] Procesando trabajo ${job.id}`,
-      {
+    async (job) => {
+      const {
         executionId,
         automationId,
         userId,
-        attempt:
-          job.attemptsMade + 1,
-      },
-    );
-
-    try {
-      await updateExecutionStatus({
-        executionId,
-        userId,
-        status: "processing",
-      });
-
-      const automation =
-        await getAutomationForExecution(
-          automationId,
-          userId,
-        );
-
-      if (!automation) {
-        throw new Error(
-          "AUTOMATION_NOT_FOUND_OR_INACTIVE",
-        );
-      }
+        inputData = {},
+      } = job.data || {};
 
       if (
-        !Array.isArray(
-          automation.actions,
-        ) ||
-        automation.actions.length === 0
+        !executionId ||
+        !automationId ||
+        !userId
       ) {
         throw new Error(
-          "AUTOMATION_WITHOUT_ACTIONS",
+          "El trabajo no contiene executionId, automationId o userId.",
         );
       }
 
       console.log(
-        `[Worker] Automatización encontrada: ${automation.name}`,
+        `[Worker] Procesando trabajo ${job.id}`,
         {
-          triggerType:
-            automation.triggerType,
+          executionId,
+          automationId,
+          userId,
 
-          actions:
-            automation.actions.length,
+          attempt:
+            job.attemptsMade + 1,
         },
       );
 
-      const conditionEvaluation =
-        evaluateConditions({
-          conditions:
-            automation.conditions || [],
-
-          inputData,
+      try {
+        await updateExecutionStatus({
+          executionId,
+          userId,
+          status: "processing",
         });
 
-      console.log(
-        "[Worker] Resultado de condiciones:",
-        {
-          passed:
-            conditionEvaluation.passed,
+        const automation =
+          await getAutomationForExecution(
+            automationId,
+            userId,
+          );
 
-          total:
-            conditionEvaluation
-              .results.length,
-        },
-      );
+        if (!automation) {
+          throw new Error(
+            "AUTOMATION_NOT_FOUND_OR_INACTIVE",
+          );
+        }
 
-      if (!conditionEvaluation.passed) {
+        if (
+          !Array.isArray(
+            automation.actions,
+          ) ||
+          automation.actions
+            .length === 0
+        ) {
+          throw new Error(
+            "AUTOMATION_WITHOUT_ACTIONS",
+          );
+        }
+
+        console.log(
+          `[Worker] Automatización encontrada: ${automation.name}`,
+          {
+            triggerType:
+              automation.triggerType,
+
+            actions:
+              automation.actions
+                .length,
+          },
+        );
+
+        const conditionEvaluation =
+          evaluateConditions({
+            conditions:
+              automation.conditions ||
+              [],
+
+            inputData,
+          });
+
+        console.log(
+          "[Worker] Resultado de condiciones:",
+          {
+            passed:
+              conditionEvaluation
+                .passed,
+
+            total:
+              conditionEvaluation
+                .results.length,
+          },
+        );
+
+        /*
+         * Si las condiciones no se
+         * cumplen, la ejecución termina
+         * correctamente pero sin ejecutar
+         * acciones.
+         */
+        if (
+          !conditionEvaluation.passed
+        ) {
+          const result = {
+            processed: true,
+            skipped: true,
+
+            reason:
+              "CONDITIONS_NOT_MET",
+
+            automationId,
+
+            automationName:
+              automation.name,
+
+            actionCount: 0,
+
+            conditions:
+              conditionEvaluation
+                .results,
+
+            processedAt:
+              new Date()
+                .toISOString(),
+          };
+
+          await updateExecutionStatus({
+            executionId,
+            userId,
+            status: "success",
+            outputData: result,
+          });
+
+          return result;
+        }
+
+        /*
+         * Ejecutar las acciones en orden.
+         *
+         * executeAutomationActions también
+         * implementa idempotencia por acción.
+         */
+        const actionResults =
+          await executeAutomationActions({
+            automation,
+            executionId,
+            userId,
+            inputData,
+          });
+
         const result = {
           processed: true,
-          skipped: true,
-
-          reason:
-            "CONDITIONS_NOT_MET",
 
           automationId,
 
           automationName:
             automation.name,
 
-          actionCount: 0,
+          actionCount:
+            actionResults.length,
 
-          conditions:
-            conditionEvaluation.results,
+          actions:
+            actionResults,
 
           processedAt:
-            new Date().toISOString(),
+            new Date()
+              .toISOString(),
         };
 
         await updateExecutionStatus({
@@ -188,66 +323,75 @@ const automationWorker = new Worker(
         });
 
         return result;
-      }
+      } catch (error) {
+        /*
+         * Registrar el fallo de la
+         * ejecución en PostgreSQL.
+         */
+        try {
+          await updateExecutionStatus({
+            executionId,
+            userId,
+            status: "failed",
 
-      const actionResults =
-        await executeAutomationActions({
-          automation,
-          userId,
-          inputData,
-        });
+            errorMessage:
+              error.message,
+          });
+        } catch (databaseError) {
+          console.error(
+            "[Worker] No se pudo guardar el error en PostgreSQL:",
+            databaseError.message,
+          );
+        }
 
-      const result = {
-        processed: true,
-        automationId,
+        /*
+         * Los adaptadores pueden indicar
+         * explícitamente que un error no
+         * debe reintentarse.
+         *
+         * Ejemplos:
+         * - credenciales inválidas
+         * - permisos insuficientes
+         * - recurso inexistente
+         *
+         * UnrecoverableError hace que
+         * BullMQ termine el trabajo sin
+         * consumir todos los intentos.
+         */
+        if (
+          error?.retryable === false
+        ) {
+          console.log(
+            `[Worker] Error permanente detectado. No se reintentará: ${error.message}`,
+          );
 
-        automationName:
-          automation.name,
-
-        actionCount:
-          actionResults.length,
-
-        actions:
-          actionResults,
-
-        processedAt:
-          new Date().toISOString(),
-      };
-
-      await updateExecutionStatus({
-        executionId,
-        userId,
-        status: "success",
-        outputData: result,
-      });
-
-      return result;
-    } catch (error) {
-      try {
-        await updateExecutionStatus({
-          executionId,
-          userId,
-          status: "failed",
-
-          errorMessage:
+          throw new UnrecoverableError(
             error.message,
-        });
-      } catch (databaseError) {
-        console.error(
-          "[Worker] No se pudo guardar el error en PostgreSQL:",
-          databaseError.message,
-        );
+          );
+        }
+
+        /*
+         * Los errores recuperables,
+         * rate limits y errores todavía
+         * no clasificados continúan hacia
+         * BullMQ para aplicar el backoff.
+         */
+        throw error;
       }
+    },
 
-      throw error;
-    }
-  },
+    {
+      connection,
 
-  {
-    connection,
-    concurrency: 1,
-  },
-);
+      concurrency: 1,
+
+      settings: {
+        backoffStrategy:
+          providerAwareBackoffStrategy,
+      },
+    },
+  );
+
 
 automationWorker.on(
   "ready",
@@ -258,6 +402,7 @@ automationWorker.on(
   },
 );
 
+
 automationWorker.on(
   "completed",
   (job, result) => {
@@ -267,6 +412,7 @@ automationWorker.on(
     );
   },
 );
+
 
 automationWorker.on(
   "failed",
@@ -282,12 +428,26 @@ automationWorker.on(
 
     const maximumAttempts =
       Number(
-        job.opts.attempts || 1,
+        job.opts.attempts ||
+          1,
       );
 
+    /*
+     * Un UnrecoverableError debe ir
+     * directamente a la DLQ aunque
+     * todavía no haya consumido los
+     * intentos configurados.
+     */
+    const unrecoverable =
+      error instanceof
+        UnrecoverableError ||
+      error?.name ===
+        "UnrecoverableError";
+
     const attemptsFinished =
+      unrecoverable ||
       job.attemptsMade >=
-      maximumAttempts;
+        maximumAttempts;
 
     if (!attemptsFinished) {
       console.log(
@@ -297,6 +457,12 @@ automationWorker.on(
       return;
     }
 
+    /*
+     * El trabajo agotó los intentos
+     * o contiene un error permanente.
+     *
+     * Se envía a la Dead Letter Queue.
+     */
     try {
       await deadLetterQueue.add(
         "failed-automation-execution",
@@ -306,16 +472,19 @@ automationWorker.on(
             job.id,
 
           executionId:
-            job.data?.executionId,
+            job.data
+              ?.executionId,
 
           automationId:
-            job.data?.automationId,
+            job.data
+              ?.automationId,
 
           userId:
             job.data?.userId,
 
           inputData:
-            job.data?.inputData ?? {},
+            job.data?.inputData ??
+            {},
 
           errorMessage:
             error.message,
@@ -323,8 +492,11 @@ automationWorker.on(
           attempts:
             job.attemptsMade,
 
+          unrecoverable,
+
           failedAt:
-            new Date().toISOString(),
+            new Date()
+              .toISOString(),
         },
 
         {
@@ -345,6 +517,7 @@ automationWorker.on(
   },
 );
 
+
 automationWorker.on(
   "error",
   (error) => {
@@ -355,24 +528,33 @@ automationWorker.on(
   },
 );
 
-async function shutdown(signal) {
+
+async function shutdown(
+  signal,
+) {
   console.log(
     `[Worker] Cerrando por señal ${signal}...`,
   );
 
   await automationWorker.close();
+
   await deadLetterQueue.close();
+
   await pool.end();
 
   process.exit(0);
 }
 
+
 process.on(
   "SIGINT",
-  () => shutdown("SIGINT"),
+  () =>
+    shutdown("SIGINT"),
 );
+
 
 process.on(
   "SIGTERM",
-  () => shutdown("SIGTERM"),
+  () =>
+    shutdown("SIGTERM"),
 );

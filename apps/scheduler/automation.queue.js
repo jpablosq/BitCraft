@@ -2,7 +2,10 @@ const path = require("node:path");
 const { Queue } = require("bullmq");
 
 require("dotenv").config({
-  path: path.resolve(__dirname, "../../.env"),
+  path: path.resolve(
+    __dirname,
+    "../../.env",
+  ),
 });
 
 const automationQueue = new Queue(
@@ -24,8 +27,7 @@ const automationQueue = new Queue(
       attempts: 3,
 
       backoff: {
-        type: "exponential",
-        delay: 2000,
+        type: "provider-aware",
       },
 
       removeOnComplete: 100,
