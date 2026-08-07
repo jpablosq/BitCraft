@@ -10,6 +10,7 @@ const pool = require("./database");
 
 const {
   getActiveConnection,
+  saveRefreshedTokens,
 } = require("./connection.service");
 
 const {
@@ -35,9 +36,14 @@ function createGoogleAdapter() {
   }
 
   return new GoogleAdapter({
-    clientId: GOOGLE_CLIENT_ID,
-    clientSecret: GOOGLE_CLIENT_SECRET,
-    redirectUri: GOOGLE_REDIRECT_URI,
+    clientId:
+      GOOGLE_CLIENT_ID,
+
+    clientSecret:
+      GOOGLE_CLIENT_SECRET,
+
+    redirectUri:
+      GOOGLE_REDIRECT_URI,
   });
 }
 
@@ -60,19 +66,27 @@ function createGitHubAdapter() {
   }
 
   return new GitHubAdapter({
-    clientId: GITHUB_CLIENT_ID,
-    clientSecret: GITHUB_CLIENT_SECRET,
-    redirectUri: GITHUB_REDIRECT_URI,
+    clientId:
+      GITHUB_CLIENT_ID,
+
+    clientSecret:
+      GITHUB_CLIENT_SECRET,
+
+    redirectUri:
+      GITHUB_REDIRECT_URI,
   });
 }
 
 
-function parseRepository(repository) {
-  const parts = String(
-    repository ?? "",
-  )
-    .trim()
-    .split("/");
+function parseRepository(
+  repository,
+) {
+  const parts =
+    String(
+      repository ?? "",
+    )
+      .trim()
+      .split("/");
 
   if (
     parts.length !== 2 ||
@@ -102,7 +116,9 @@ async function executeGoogleAction({
       "google",
     );
 
-  if (!connection?.accessToken) {
+  if (
+    !connection?.accessToken
+  ) {
     throw new Error(
       "GOOGLE_CONNECTION_NOT_FOUND",
     );
@@ -122,6 +138,15 @@ async function executeGoogleAction({
       refreshToken:
         connection.refreshToken,
 
+      /*
+       * La fecha almacenada en PostgreSQL
+       * se pasa al cliente OAuth de Google
+       * para que pueda detectar si el
+       * access token está vencido.
+       */
+      expiresAt:
+        connection.tokenExpiresAt,
+
       to:
         configuration.to,
 
@@ -130,6 +155,35 @@ async function executeGoogleAction({
 
       body:
         configuration.body,
+
+      /*
+       * Cuando Google renueva el access
+       * token utilizando el refresh token,
+       * GoogleAdapter ejecuta este callback.
+       *
+       * El nuevo token se cifra y vuelve
+       * a guardar en PostgreSQL.
+       */
+      onTokensRefreshed:
+        async ({
+          accessToken,
+          refreshToken,
+          expiresAt,
+        }) => {
+          await saveRefreshedTokens({
+            connection,
+
+            accessToken,
+
+            refreshToken,
+
+            expiresAt,
+          });
+
+          console.log(
+            "[Worker] Tokens de Google renovados y guardados correctamente.",
+          );
+        },
     });
   }
 
@@ -150,7 +204,9 @@ async function executeGitHubAction({
       "github",
     );
 
-  if (!connection?.accessToken) {
+  if (
+    !connection?.accessToken
+  ) {
     throw new Error(
       "GITHUB_CONNECTION_NOT_FOUND",
     );
@@ -222,7 +278,8 @@ async function executeAction({
     );
 
   if (
-    action.provider === "google"
+    action.provider ===
+    "google"
   ) {
     return executeGoogleAction({
       action,
@@ -232,7 +289,8 @@ async function executeAction({
   }
 
   if (
-    action.provider === "github"
+    action.provider ===
+    "github"
   ) {
     return executeGitHubAction({
       action,
@@ -248,11 +306,12 @@ async function executeAction({
 
 
 /*
- * Crea o recupera el registro de una acción
- * dentro de una ejecución.
+ * Crea o recupera el registro de
+ * una acción dentro de una ejecución.
  *
- * Si ya fue completada anteriormente,
- * p_should_execute será false.
+ * Si la acción ya fue completada
+ * anteriormente, p_should_execute
+ * será false.
  */
 async function startActionExecution({
   executionId,
@@ -281,21 +340,24 @@ async function startActionExecution({
 
   return {
     actionExecutionId:
-      rows[0]?.p_action_execution_id,
+      rows[0]
+        ?.p_action_execution_id,
 
     shouldExecute:
-      rows[0]?.p_should_execute ??
+      rows[0]
+        ?.p_should_execute ??
       false,
 
     resultData:
-      rows[0]?.p_result_data ??
+      rows[0]
+        ?.p_result_data ??
       null,
   };
 }
 
 
 /*
- * Marca una acción como ejecutada
+ * Marca una acción como completada
  * correctamente y almacena su resultado.
  */
 async function completeActionExecution({
@@ -311,6 +373,7 @@ async function completeActionExecution({
     `,
     [
       actionExecutionId,
+
       JSON.stringify(
         result ?? {},
       ),
@@ -342,11 +405,15 @@ async function failActionExecution({
 
 
 /*
- * Ejecuta las acciones en orden.
+ * Ejecuta las acciones de una
+ * automatización en orden.
  *
- * La idempotencia se maneja individualmente:
- * una acción que ya terminó correctamente
- * no vuelve a ejecutarse durante un reintento
+ * La idempotencia se maneja
+ * individualmente.
+ *
+ * Una acción que ya terminó
+ * correctamente no vuelve a
+ * ejecutarse durante un reintento
  * del trabajo de BullMQ.
  */
 async function executeAutomationActions({
@@ -373,8 +440,12 @@ async function executeAutomationActions({
   );
 
   const context = {
-    input: inputData,
-    trigger: inputData,
+    input:
+      inputData,
+
+    trigger:
+      inputData,
+
     steps: {},
   };
 
@@ -400,8 +471,9 @@ async function executeAutomationActions({
     }
 
     /*
-     * Si ya terminó correctamente en
-     * un intento anterior, se omite.
+     * Si la acción ya terminó
+     * correctamente en un intento
+     * anterior, no se vuelve a ejecutar.
      */
     if (
       !actionExecution
@@ -424,9 +496,13 @@ async function executeAutomationActions({
 
       /*
        * Restauramos el resultado previo
-       * en steps para que las acciones
-       * siguientes puedan seguir utilizando
-       * {{steps.1...}}, {{steps.2...}}, etc.
+       * dentro de context.steps.
+       *
+       * Esto permite que acciones
+       * posteriores continúen utilizando:
+       *
+       * {{steps.1...}}
+       * {{steps.2...}}
        */
       context.steps[
         String(
@@ -484,6 +560,12 @@ async function executeAutomationActions({
         result,
       });
 
+      /*
+       * Guardamos el resultado de la
+       * acción dentro del contexto para
+       * permitir interpolaciones en
+       * acciones posteriores.
+       */
       context.steps[
         String(
           action.position,

@@ -55,7 +55,8 @@ class GoogleAdapter extends ProviderAdapter {
         tokens.access_token,
 
       refreshToken:
-        tokens.refresh_token ?? null,
+        tokens.refresh_token ??
+        null,
 
       expiresAt:
         tokens.expiry_date
@@ -104,9 +105,11 @@ class GoogleAdapter extends ProviderAdapter {
   async sendEmail({
     accessToken,
     refreshToken = null,
+    expiresAt = null,
     to,
     subject,
     body,
+    onTokensRefreshed = null,
   }) {
     if (!accessToken) {
       throw new Error(
@@ -132,12 +135,76 @@ class GoogleAdapter extends ProviderAdapter {
       );
     }
 
+    /*
+     * Google puede emitir un nuevo
+     * access token cuando el actual
+     * está vencido o próximo a vencer.
+     *
+     * El worker proporciona un callback
+     * para guardar los nuevos tokens
+     * cifrados en PostgreSQL.
+     */
+    if (
+      typeof onTokensRefreshed ===
+      "function"
+    ) {
+      this.oauth2Client.on(
+        "tokens",
+        async (tokens) => {
+          if (
+            !tokens.access_token
+          ) {
+            return;
+          }
+
+          try {
+            await onTokensRefreshed({
+              accessToken:
+                tokens.access_token,
+
+              refreshToken:
+                tokens.refresh_token ??
+                null,
+
+              expiresAt:
+                tokens.expiry_date
+                  ? new Date(
+                      tokens.expiry_date,
+                    )
+                  : null,
+            });
+          } catch (error) {
+            console.error(
+              "[GoogleAdapter] No se pudieron persistir los tokens renovados:",
+              error.message,
+            );
+          }
+        },
+      );
+    }
+
+    /*
+     * Además del access y refresh token,
+     * se proporciona expiry_date.
+     *
+     * De esta forma googleapis puede
+     * detectar correctamente que el token
+     * está vencido y utilizar el refresh
+     * token antes de realizar la petición.
+     */
     this.oauth2Client.setCredentials({
       access_token:
         accessToken,
 
       refresh_token:
         refreshToken,
+
+      expiry_date:
+        expiresAt
+          ? new Date(
+              expiresAt,
+            ).getTime()
+          : undefined,
     });
 
     const gmail =
@@ -214,7 +281,8 @@ class GoogleAdapter extends ProviderAdapter {
           data.id,
 
         threadId:
-          data.threadId ?? null,
+          data.threadId ??
+          null,
       };
     } catch (error) {
       throw normalizeProviderError(
