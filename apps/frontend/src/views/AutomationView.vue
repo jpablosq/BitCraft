@@ -890,8 +890,144 @@ async function loadAutomations() {
   }
 }
 
+function isCronFieldValid(
+  field,
+  min,
+  max,
+) {
+  const parts =
+    String(field).split(",");
+
+  return parts.every(
+    (part) => {
+      const [
+        base,
+        stepValue,
+      ] = part.split("/");
+
+      if (
+        stepValue !== undefined
+      ) {
+        const step =
+          Number(stepValue);
+
+        if (
+          !Number.isInteger(step) ||
+          step <= 0
+        ) {
+          return false;
+        }
+      }
+
+      if (base === "*") {
+        return true;
+      }
+
+      if (
+        base.includes("-")
+      ) {
+        const [
+          startValue,
+          endValue,
+        ] = base.split("-");
+
+        const start =
+          Number(startValue);
+
+        const end =
+          Number(endValue);
+
+        return (
+          Number.isInteger(start) &&
+          Number.isInteger(end) &&
+          start >= min &&
+          start <= max &&
+          end >= min &&
+          end <= max &&
+          start <= end
+        );
+      }
+
+      const value =
+        Number(base);
+
+      return (
+        Number.isInteger(value) &&
+        value >= min &&
+        value <= max
+      );
+    },
+  );
+}
+
+function validateCronExpression(
+  expression,
+) {
+  const fields =
+    String(
+      expression ?? "",
+    )
+      .trim()
+      .split(/\s+/);
+
+  if (fields.length !== 5) {
+    return false;
+  }
+
+  const [
+    minute,
+    hour,
+    dayOfMonth,
+    month,
+    dayOfWeek,
+  ] = fields;
+
+  return (
+    isCronFieldValid(
+      minute,
+      0,
+      59,
+    ) &&
+    isCronFieldValid(
+      hour,
+      0,
+      23,
+    ) &&
+    isCronFieldValid(
+      dayOfMonth,
+      1,
+      31,
+    ) &&
+    isCronFieldValid(
+      month,
+      1,
+      12,
+    ) &&
+    isCronFieldValid(
+      dayOfWeek,
+      0,
+      7,
+    )
+  );
+}
+
 async function handleSubmit() {
   resetMessages();
+
+  if (
+    form.value.triggerType ===
+      "schedule" &&
+    !validateCronExpression(
+      form.value
+        .triggerConfiguration
+        .cronExpression,
+    )
+  ) {
+    errorMessage.value =
+      "La expresión cron no es válida. Utiliza el formato: minuto hora día mes día-semana. Ejemplo: 0 8 * * *.";
+
+    return;
+  }
 
   if (
     form.value.conditions.length &&
@@ -940,7 +1076,9 @@ async function handleSubmit() {
       successMessage.value =
         "Automatización actualizada correctamente.";
     } else {
-      await createAutomation(payload);
+      await createAutomation(
+        payload,
+      );
 
       successMessage.value =
         "Automatización creada correctamente.";
@@ -970,58 +1108,74 @@ function cloneData(value) {
   );
 }
 
-async function startEdit(automation) {
+async function startEdit(
+  automation,
+) {
   resetMessages();
 
-  editingId.value = automation.id;
+  editingId.value =
+    automation.id;
 
-  const clonedActions = cloneData(
-    automation.actions || [],
-  ).map((action) => ({
-    provider:
-      action.provider || "google",
+  const clonedActions =
+    cloneData(
+      automation.actions || [],
+    ).map((action) => ({
+      provider:
+        action.provider ||
+        "google",
 
-    actionName:
-      action.actionName || "send_email",
+      actionName:
+        action.actionName ||
+        "send_email",
 
-    configuration:
-      cloneData(
-        action.configuration || {},
-      ),
-  }));
+      configuration:
+        cloneData(
+          action.configuration ||
+            {},
+        ),
+    }));
 
   form.value = {
     name:
       automation.name || "",
 
     triggerType:
-      automation.triggerType || "event",
+      automation.triggerType ||
+      "event",
 
     triggerProvider:
-      automation.triggerProvider || "github",
+      automation.triggerProvider ||
+      "github",
 
     triggerEvent:
-      automation.triggerEvent || "issue.created",
+      automation.triggerEvent ||
+      "issue.created",
 
     triggerConfiguration:
       cloneData(
-        automation.triggerConfiguration || {
-          repository: "",
-        },
+        automation
+          .triggerConfiguration ||
+          {
+            repository: "",
+          },
       ),
 
     conditions:
       cloneData(
-        automation.conditions || [],
+        automation.conditions ||
+          [],
       ),
 
     actions:
       clonedActions.length
         ? clonedActions
-        : [createDefaultAction()],
+        : [
+            createDefaultAction(),
+          ],
 
     isActive:
-      automation.isActive ?? true,
+      automation.isActive ??
+      true,
   };
 
   showForm.value = true;
@@ -1029,7 +1183,9 @@ async function startEdit(automation) {
   await nextTick();
 
   document
-    .querySelector(".automation-form-card")
+    .querySelector(
+      ".automation-form-card",
+    )
     ?.scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -1037,9 +1193,10 @@ async function startEdit(automation) {
 }
 
 async function remove(id) {
-  const confirmed = window.confirm(
-    "¿Deseas eliminar esta automatización?",
-  );
+  const confirmed =
+    window.confirm(
+      "¿Deseas eliminar esta automatización?",
+    );
 
   if (!confirmed) {
     return;
@@ -1066,7 +1223,10 @@ async function remove(id) {
   }
 }
 
-async function toggle(id, status) {
+async function toggle(
+  id,
+  status,
+) {
   resetMessages();
 
   try {
@@ -1075,9 +1235,10 @@ async function toggle(id, status) {
       status,
     );
 
-    successMessage.value = status
-      ? "Automatización activada correctamente."
-      : "Automatización desactivada correctamente.";
+    successMessage.value =
+      status
+        ? "Automatización activada correctamente."
+        : "Automatización desactivada correctamente.";
 
     await loadAutomations();
   } catch (error) {
@@ -1092,9 +1253,12 @@ async function toggle(id, status) {
   }
 }
 
-function getTriggerLabel(automation) {
+function getTriggerLabel(
+  automation,
+) {
   if (
-    automation.triggerType === "schedule"
+    automation.triggerType ===
+    "schedule"
   ) {
     return "Programación → Acciones";
   }
@@ -1102,24 +1266,32 @@ function getTriggerLabel(automation) {
   return "GitHub → Acciones";
 }
 
-function getActionLabel(action) {
+function getActionLabel(
+  action,
+) {
   if (
-    action.provider === "google" &&
-    action.actionName === "send_email"
+    action.provider ===
+      "google" &&
+    action.actionName ===
+      "send_email"
   ) {
     return "Google: enviar correo";
   }
 
   if (
-    action.provider === "github" &&
-    action.actionName === "create_issue"
+    action.provider ===
+      "github" &&
+    action.actionName ===
+      "create_issue"
   ) {
     return "GitHub: crear issue";
   }
 
   if (
-    action.provider === "github" &&
-    action.actionName === "add_comment"
+    action.provider ===
+      "github" &&
+    action.actionName ===
+      "add_comment"
   ) {
     return "GitHub: agregar comentario";
   }
